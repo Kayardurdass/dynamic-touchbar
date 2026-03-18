@@ -6,27 +6,40 @@
 #    By: uanglade <uanglade@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/09/16 02:15:35 by uanglade          #+#    #+#              #
-#    Updated: 2026/03/18 02:37:18 by uanglade         ###   ########.fr        #
+#    Updated: 2026/03/18 02:49:17 by uanglade         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
 CXX := g++
 CXXFLAGS := -g3
-SRC := ./main.cpp ./Backend.cpp ./Vulkan.cpp
+DFLAGS	= -MMD -MP -MF $(@:.o=.d)
+
+INCS := ./vk-bootstrap/src/ \
+		/usr/include/libdrm
+
+BUILD_DIR := ./obj
+SRC_DIR := ./src
+SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+
 SHADER_SRC := ./shaders/triangle.frag ./shaders/triangle.vert
 SHADER_OBJ := $(addsuffix .spv,$(SHADER_SRC))
-INCS := -I./vk-bootstrap/src/ -I/usr/include/libdrm
-OBJ := $(SRC:.cpp=.o)
+
+OBJS = $(addprefix $(BUILD_DIR)/,$(SRCS:%.cpp=%.o))
+DEPS = $(addprefix $(BUILD_DIR)/,$(SRCS:%.cpp=%.d))
+
 NAME := dynamic-touchbar
 
 # Rules
 all: $(NAME)
 
-$(NAME): $(OBJ) $(SHADER_OBJ)
-	$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJ) -L./vk-bootstrap/ -lvk-bootstrap -lvulkan -ldrm
+-include $(DEPS)
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) $(INCS) -c $< -o $@
+$(NAME): $(OBJS) $(SHADER_OBJ)
+	$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJS) -L./vk-bootstrap/ -lvk-bootstrap -lvulkan -ldrm
+
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(DFLAGS) $(INCS:%=-I%) -o $@ -c $<
 
 %.spv: %
 	glslang -V $<  -o $@

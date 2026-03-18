@@ -46,7 +46,7 @@ void Backend::try_open_card(int fd)
     for (int i = 0; i < res->count_connectors; i++) {
         conn = drmModeGetConnector(fd, res->connectors[i]);
 
-        if (!conn)
+        if (conn == nullptr)
             throw std::runtime_error("No connector found");
         if (conn->connection != DRM_MODE_CONNECTED)
             throw std::runtime_error("No connected connectors found");
@@ -59,7 +59,7 @@ void Backend::try_open_card(int fd)
     for (int i = 0; i < res->count_crtcs; i++) {
         crtc = drmModeGetCrtc(fd, res->crtcs[i]);
 
-        if (!crtc)
+        if (crtc == nullptr)
             throw std::runtime_error("No crcts found");
         break;
     }
