@@ -1,0 +1,6 @@
+*.[aod]
+/dynamic-touchbar
+/vk-bootstrap
+compile_commands.json
+/.cache/
+vgcore*
