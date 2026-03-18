@@ -6,7 +6,7 @@
 #    By: uanglade <uanglade@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/09/16 02:15:35 by uanglade          #+#    #+#              #
-#    Updated: 2026/03/18 02:49:17 by uanglade         ###   ########.fr        #
+#    Updated: 2026/03/18 03:29:08 by uanglade         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -14,12 +14,14 @@ CXX := g++
 CXXFLAGS := -g3
 DFLAGS	= -MMD -MP -MF $(@:.o=.d)
 
-INCS := ./vk-bootstrap/src/ \
+INCS := ./_deps/vk-bootstrap/src \
 		/usr/include/libdrm
 
 BUILD_DIR := ./obj
 SRC_DIR := ./src
 SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+LIB_DIR := ./_deps/vk-bootstrap/build/
+LDD_FLAGS := -lvk-bootstrap -lvulkan -ldrm
 
 SHADER_SRC := ./shaders/triangle.frag ./shaders/triangle.vert
 SHADER_OBJ := $(addsuffix .spv,$(SHADER_SRC))
@@ -29,13 +31,19 @@ DEPS = $(addprefix $(BUILD_DIR)/,$(SRCS:%.cpp=%.d))
 
 NAME := dynamic-touchbar
 
+DEPS_DIR := _deps
+VKBOOTSTRAP_DIR := $(DEPS_DIR)/vk-bootstrap
+VKBOOTSTRAP_NAME := $(DEPS_DIR)/vk-bootstrap/build/libvk-bootstrap.a
+VKBOOTSTRAP_URL := https://github.com/charles-lunarg/vk-bootstrap
+VKBOOTSTRAP_VERSION := v1.4.344
+
 # Rules
 all: $(NAME)
 
 -include $(DEPS)
 
 $(NAME): $(OBJS) $(SHADER_OBJ)
-	$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJS) -L./vk-bootstrap/ -lvk-bootstrap -lvulkan -ldrm
+	$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJS) $(LIB_DIR:%=-L%) $(LDD_FLAGS)
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
@@ -49,9 +57,23 @@ fclean: clean
 	rm -f $(NAME)
 
 clean:
-	rm -f $(OBJ)
+	rm -f $(OBJS)
 	rm -f $(SHADER_OBJ)
 
 re: fclean all
+
+$(VKBOOTSTRAP_DIR):
+	mkdir -p _deps
+	cd _deps; \
+	git clone --depth=1 --branch=$(VKBOOTSTRAP_VERSION) $(VKBOOTSTRAP_URL)
+
+$(VKBOOTSTRAP_NAME): setup-vkbootstrap
+
+setup-vkbootstrap: $(VKBOOTSTRAP_DIR)
+	cd $(VKBOOTSTRAP_DIR); \
+	mkdir build -p ; \
+	cd build; \
+	cmake ..; \
+	make -j
 
 .PHONY: all clean fclean re
