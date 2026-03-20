@@ -6,7 +6,7 @@
 #    By: uanglade <uanglade@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/09/16 02:15:35 by uanglade          #+#    #+#              #
-#    Updated: 2026/03/18 03:29:08 by uanglade         ###   ########.fr        #
+#    Updated: 2026/03/20 16:05:24 by uanglade         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -15,7 +15,8 @@ CXXFLAGS := -g3
 DFLAGS	= -MMD -MP -MF $(@:.o=.d)
 
 INCS := ./_deps/vk-bootstrap/src \
-		/usr/include/libdrm
+		/usr/include/libdrm \
+		./_deps/clay
 
 BUILD_DIR := ./obj
 SRC_DIR := ./src
@@ -36,6 +37,10 @@ VKBOOTSTRAP_DIR := $(DEPS_DIR)/vk-bootstrap
 VKBOOTSTRAP_NAME := $(DEPS_DIR)/vk-bootstrap/build/libvk-bootstrap.a
 VKBOOTSTRAP_URL := https://github.com/charles-lunarg/vk-bootstrap
 VKBOOTSTRAP_VERSION := v1.4.344
+
+CLAY_DIR := $(DEPS_DIR)/clay
+CLAY_URL := https://github.com/nicbarker/clay.git
+CLAY_VERSION := v0.14
 
 # Rules
 all: $(NAME)
@@ -75,5 +80,13 @@ setup-vkbootstrap: $(VKBOOTSTRAP_DIR)
 	cd build; \
 	cmake ..; \
 	make -j
+
+$(CLAY_DIR):
+	mkdir -p _deps
+	cd _deps; \
+	git clone --depth=1 --branch=$(CLAY_VERSION) $(CLAY_URL)
+
+setup-clay: $(CLAY_DIR)
+
 
 .PHONY: all clean fclean re

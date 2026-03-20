@@ -29,9 +29,12 @@ public:
     Backend();
     void Render(Vulkan &vulkan);
     ~Backend();
-    void add_dma_buff(uint32_t dma_buff_fd, uint32_t pitch);
+    void add_dma_buff(Vulkan &vulkan);
+    uint32_t width;
+    uint32_t height;
 
 private:
+    drmEventContext event_handler;
     void open_card();
     void try_open_card(int fd);
     int card;

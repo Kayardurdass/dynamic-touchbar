@@ -66,13 +66,15 @@ void Backend::try_open_card(int fd)
     this->mode = conn->modes[0];
     this->conn = conn;
     this->crtc = crtc;
+    width = mode.vdisplay;
+    height = mode.hdisplay;
 }
 
-void Backend::add_dma_buff(uint32_t dma_buff_fd, uint32_t pitch)
+void Backend::add_dma_buff(Vulkan &vulkan)
 {
     drm_prime_handle prime = {};
-    prime.fd = dma_buff_fd;
-    prime.flags = 0;
+    prime.fd = vulkan.dma_buf_fd;
+    prime.flags = DRM_PRIME_CAP_IMPORT;
 
     if (drmIoctl(card, DRM_IOCTL_PRIME_FD_TO_HANDLE, &prime) < 0)
         throw std::runtime_error("PRIME import failed");
@@ -80,7 +82,7 @@ void Backend::add_dma_buff(uint32_t dma_buff_fd, uint32_t pitch)
     uint32_t handle = prime.handle;
 
     uint32_t handles[4] = { handle };
-    uint32_t pitches[4] = { pitch };
+    uint32_t pitches[4] = { vulkan.pitch };
     uint32_t offsets[4] = { 0 };
 
     uint32_t fb;
@@ -166,6 +168,15 @@ void Backend::add_dma_buff(uint32_t dma_buff_fd, uint32_t pitch)
 
     drmModeFreePlaneResources(plane_res);
     this->frame_buffer = fb;
+    drmEventContext event_handler {};
+    event_handler.version = DRM_EVENT_CONTEXT_VERSION;
+    event_handler.page_flip_handler
+        = [](int fd, unsigned int frame, unsigned int sec, unsigned int usec,
+              void *data) {
+              bool *flip_done = static_cast<bool *>(data);
+              *flip_done = true;
+              std::cout << "caca\n";
+          };
 }
 
 void Backend::open_card()
@@ -204,20 +215,47 @@ Backend::~Backend() { close(card); }
 
 void Backend::Render(Vulkan &vulkan)
 {
+    static uint32_t plane_fb_prop
+        = find_prop_id(card, plane_id, DRM_MODE_OBJECT_PLANE, "FB_ID");
+    bool flip_pending = false;
 
     vulkan.render_frame();
-    drmModeAtomicReqPtr atomic_req = drmModeAtomicAlloc();
-    if (atomic_req == nullptr)
-        throw std::runtime_error("failed to create atomic request");
-    std::vector<uint32_t> atomic_reqs;
-    uint32_t plane_fb_prop
-        = find_prop_id(card, plane_id, DRM_MODE_OBJECT_PLANE, "FB_ID");
-    drmModeAtomicAddProperty(atomic_req, plane_id, plane_fb_prop, frame_buffer);
-    if (drmModeAtomicCommit(
-            card, atomic_req, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr)
-        != 0) {
-        throw std::runtime_error("Atomic commit failed");
+    // drmModeClip clips[1];
+    // clips[0].x1 = 0;
+    // clips[0].y1 = 0;
+    // clips[0].x2 = mode.hdisplay;
+    // clips[0].y2 = mode.vdisplay;
+    // drmModeDirtyFB(card, frame_buffer, clips, 1);
+
+    if (!flip_pending) {
+        int ret = drmModePageFlip(card, crtc->crtc_id, frame_buffer,
+            DRM_MODE_PAGE_FLIP_EVENT, &flip_pending);
+        if (ret != 0)
+            flip_pending = true;
     }
 
-    drmModeAtomicFree(atomic_req);
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(card, &fds);
+
+    timeval wait;
+    wait.tv_usec = 5000;
+    wait.tv_sec = 0;
+    select(card + 1, &fds, NULL, NULL, &wait);
+
+    if (FD_ISSET(card, &fds)) {
+        drmHandleEvent(card, &event_handler);
+    }
+    // drmModeAtomicReqPtr atomic_req = drmModeAtomicAlloc();
+    // if (atomic_req == nullptr)
+    //     throw std::runtime_error("failed to create atomic request");
+    // std::vector<uint32_t> atomic_reqs;
+    // drmModeAtomicAddProperty(atomic_req, plane_id, plane_fb_prop,
+    // frame_buffer); if (drmModeAtomicCommit(
+    //         card, atomic_req, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr)
+    //     != 0) {
+    //     throw std::runtime_error("Atomic commit failed");
+    // }
+    //
+    // drmModeAtomicFree(atomic_req);
 }

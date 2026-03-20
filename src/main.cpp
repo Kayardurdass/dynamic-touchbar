@@ -4,9 +4,10 @@
 int main()
 {
     Backend backend;
-    Vulkan vulkan_bak;
+    Vulkan vulkan_bak(backend.width, backend.height);
 
-    backend.add_dma_buff(vulkan_bak.dma_buf_fd, vulkan_bak.pitch);
+    std::cout << "fb" << vulkan_bak.framebuffer << "\n";
+    backend.add_dma_buff(vulkan_bak);
     auto start = std::chrono::high_resolution_clock::now();
 
     while (true) {

@@ -1,5 +1,6 @@
 #include "Vulkan.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -509,77 +510,63 @@ bool Vulkan::create_command_pool()
 
 bool Vulkan::create_command_buffers()
 {
-    command_buffers.resize(1);
-
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = command_pool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = (uint32_t)command_buffers.size();
+    allocInfo.commandBufferCount = 1;
 
-    if (disp.allocateCommandBuffers(&allocInfo, command_buffers.data())
+    if (disp.allocateCommandBuffers(&allocInfo, &command_buffer)
         != VK_SUCCESS) {
         return -1; // failed to allocate command buffers;
     }
 
-    for (size_t i = 0; i < command_buffers.size(); i++) {
-        VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-        if (disp.beginCommandBuffer(command_buffers[i], &begin_info)
-            != VK_SUCCESS) {
-            return -1; // failed to begin recording command buffer
-        }
+    if (disp.beginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
+        return -1; // failed to begin recording command buffer
+    }
 
-        VkRenderPassBeginInfo render_pass_info = {};
-        render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        render_pass_info.renderPass = render_pass;
-        render_pass_info.framebuffer = framebuffer;
-        render_pass_info.renderArea.offset = { 0, 0 };
-        render_pass_info.renderArea.extent = (VkExtent2D) { 64, 2048 };
-        VkClearValue clearColor { { { 0.0f, 0.0f, 0.0f, 1.0f } } };
-        render_pass_info.clearValueCount = 1;
-        render_pass_info.pClearValues = &clearColor;
+    VkRenderPassBeginInfo render_pass_info = {};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_info.renderPass = render_pass;
+    render_pass_info.framebuffer = framebuffer;
+    render_pass_info.renderArea.offset = { 0, 0 };
+    render_pass_info.renderArea.extent = (VkExtent2D) { 64, 2048 };
+    VkClearValue clearColor { { { 0.0f, 0.0f, 0.0f, 1.0f } } };
+    render_pass_info.clearValueCount = 1;
+    render_pass_info.pClearValues = &clearColor;
 
-        VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = (float)64;
-        viewport.height = (float)2048;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
+    VkViewport viewport = {};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float)64;
+    viewport.height = (float)2048;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
 
-        VkRect2D scissor = {};
-        scissor.offset = { 0, 0 };
-        scissor.extent = (VkExtent2D) { 64, 2048 };
+    VkRect2D scissor = {};
+    scissor.offset = { 0, 0 };
+    scissor.extent = (VkExtent2D) { 64, 2048 };
 
-        disp.cmdSetViewport(command_buffers[i], 0, 1, &viewport);
-        disp.cmdSetScissor(command_buffers[i], 0, 1, &scissor);
+    disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
+    disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
 
-        disp.cmdBeginRenderPass(
-            command_buffers[i], &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+    disp.cmdBeginRenderPass(
+        command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
-        disp.cmdBindPipeline(command_buffers[i],
-            VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
-        // vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer,
-        //                         VkPipelineBindPoint pipelineBindPoint,
-        //                         VkPipelineLayout layout,
-        //                         uint32_t firstSet,
-        //                         uint32_t descriptorSetCount,
-        //                         const VkDescriptorSet *pDescriptorSets,
-        //                         uint32_t dynamicOffsetCount,
-        //                         const uint32_t *pDynamicOffsets)
-        vkCmdBindDescriptorSets(command_buffers[i],
-            VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1,
-            &descriptor_sets, 0, nullptr);
-        disp.cmdDraw(command_buffers[i], 6, 1, 0, 0);
+    disp.cmdBindPipeline(
+        command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pipeline_layout, 0, 1, &descriptor_sets, 0, nullptr);
+    disp.cmdDraw(command_buffer, 6, 1, 0, 0);
 
-        disp.cmdEndRenderPass(command_buffers[i]);
+    disp.cmdEndRenderPass(command_buffer);
 
-        if (disp.endCommandBuffer(command_buffers[i]) != VK_SUCCESS) {
-            std::cout << "failed to record command buffer\n";
-            return -1; // failed to record command buffer!
-        }
+    if (disp.endCommandBuffer(command_buffer) != VK_SUCCESS) {
+        std::cout << "failed to record command buffer\n";
+        return -1; // failed to record command buffer!
     }
     return 0;
 }
@@ -646,6 +633,7 @@ bool Vulkan::get_queues()
 
 void Vulkan::render_frame()
 {
+    static int frame = 0;
     static auto startTime = std::chrono::high_resolution_clock::now();
     disp.waitForFences(1, &render_fence, VK_TRUE, UINT64_MAX);
     disp.resetFences(1, &render_fence);
@@ -662,14 +650,18 @@ void Vulkan::render_frame()
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
     submit.commandBufferCount = 1;
-    submit.pCommandBuffers = command_buffers.data();
+    submit.pCommandBuffers = &command_buffer;
 
     if (disp.queueSubmit(graphics_queue, 1, &submit, render_fence)
         != VK_SUCCESS)
         throw std::runtime_error("queueSubmit failed");
+    frame++;
+    frame = std::max(frame, 0);
 }
 
-Vulkan::Vulkan()
+Vulkan::Vulkan(int width, int height)
+    : width(width)
+    , height(height)
 {
     if (!init_vulkan())
         throw std::runtime_error("failed to init vulkan");
